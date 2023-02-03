@@ -337,6 +337,7 @@ private:
 
     if(publish_tf_)
     {
+      // TODO: change to transform only
       spub.pub = nh.advertise<geometry_msgs::TransformStamped>(tracked_frame_suffix_ + "/" + subject_name + "/"
                                                                                                             + segment_name, 10);
     }
@@ -506,6 +507,7 @@ private:
 
                   if(publish_tf_)
                   {
+                    // TODO: change to transform only
                     tf::transformStampedTFToMsg(transforms.back(), *pose_msg);
                     seg.pub.publish(pose_msg);
                   }
