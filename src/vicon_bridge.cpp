@@ -43,6 +43,7 @@
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/Transform.h>
 #include <vicon_bridge/viconGrabPose.h>
 #include <vicon_bridge/Markers.h>
 #include <vicon_bridge/Marker.h>
@@ -135,6 +136,7 @@ class SegmentPublisher
 {
 public:
   ros::Publisher pub;
+  ros::Publisher pub_tf;
   bool is_ready;
   tf::Transform calibration_pose;
   bool calibrated;
@@ -337,9 +339,11 @@ private:
 
     if(publish_tf_)
     {
-      // TODO: change to transform only
-      spub.pub = nh.advertise<geometry_msgs::TransformStamped>(tracked_frame_suffix_ + "/" + subject_name + "/"
-                                                                                                            + segment_name, 10);
+      spub.pub = nh.advertise<geometry_msgs::TransformStamped>(tracked_frame_suffix_ + "/" 
+                                          + subject_name + "/" + segment_name, 10);
+      // also use a "normal" transform message for RVIZ display
+      spub.pub_tf = nh.advertise<geometry_msgs::Transform>(tracked_frame_suffix_ + "/" 
+                                          + subject_name + "_TF/" + segment_name, 10);
     }
     // try to get zero pose from parameter server
     string param_suffix(subject_name + "/" + segment_name + "/zero_pose/");
@@ -461,6 +465,7 @@ private:
     tf::Transform transform;
     std::vector<tf::StampedTransform, std::allocator<tf::StampedTransform> > transforms;
     geometry_msgs::TransformStampedPtr pose_msg(new geometry_msgs::TransformStamped);
+    geometry_msgs::TransformPtr pose_msg_tf(new geometry_msgs::Transform);
     static unsigned int cnt = 0;
 
     for (unsigned int i_subjects = 0; i_subjects < n_subjects; i_subjects++)
@@ -509,7 +514,9 @@ private:
                   {
                     // TODO: change to transform only
                     tf::transformStampedTFToMsg(transforms.back(), *pose_msg);
+                    tf::transformTFToMsg(transforms.back(), *pose_msg_tf);
                     seg.pub.publish(pose_msg);
+                    seg.pub_tf.publish(pose_msg_tf);
                   }
                 }
               }
