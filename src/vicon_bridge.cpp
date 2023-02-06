@@ -36,6 +36,11 @@
 #include <iostream>
 #include <map>
 #include <unordered_map>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <string>
+#include <fstream>
+#include <filesystem>
 
 // ROS
 #include <ros/ros.h>
@@ -55,10 +60,10 @@
 #include <diagnostic_updater/diagnostic_updater.h>
 #include <diagnostic_updater/update_functions.h>
 
-using std::min;
-using std::max;
-using std::string;
 using std::map;
+using std::max;
+using std::min;
+using std::string;
 
 using namespace ViconDataStreamSDK::CPP;
 
@@ -66,20 +71,20 @@ string Adapt(const Direction::Enum i_Direction)
 {
   switch (i_Direction)
   {
-    case Direction::Forward:
-      return "Forward";
-    case Direction::Backward:
-      return "Backward";
-    case Direction::Left:
-      return "Left";
-    case Direction::Right:
-      return "Right";
-    case Direction::Up:
-      return "Up";
-    case Direction::Down:
-      return "Down";
-    default:
-      return "Unknown";
+  case Direction::Forward:
+    return "Forward";
+  case Direction::Backward:
+    return "Backward";
+  case Direction::Left:
+    return "Left";
+  case Direction::Right:
+    return "Right";
+  case Direction::Up:
+    return "Up";
+  case Direction::Down:
+    return "Down";
+  default:
+    return "Unknown";
   }
 }
 
@@ -87,48 +92,48 @@ string Adapt(const Result::Enum i_result)
 {
   switch (i_result)
   {
-    case Result::ClientAlreadyConnected:
-      return "ClientAlreadyConnected";
-    case Result::ClientConnectionFailed:
-      return "";
-    case Result::CoLinearAxes:
-      return "CoLinearAxes";
-    case Result::InvalidDeviceName:
-      return "InvalidDeviceName";
-    case Result::InvalidDeviceOutputName:
-      return "InvalidDeviceOutputName";
-    case Result::InvalidHostName:
-      return "InvalidHostName";
-    case Result::InvalidIndex:
-      return "InvalidIndex";
-    case Result::InvalidLatencySampleName:
-      return "InvalidLatencySampleName";
-    case Result::InvalidMarkerName:
-      return "InvalidMarkerName";
-    case Result::InvalidMulticastIP:
-      return "InvalidMulticastIP";
-    case Result::InvalidSegmentName:
-      return "InvalidSegmentName";
-    case Result::InvalidSubjectName:
-      return "InvalidSubjectName";
-    case Result::LeftHandedAxes:
-      return "LeftHandedAxes";
-    case Result::NoFrame:
-      return "NoFrame";
-    case Result::NotConnected:
-      return "NotConnected";
-    case Result::NotImplemented:
-      return "NotImplemented";
-    case Result::ServerAlreadyTransmittingMulticast:
-      return "ServerAlreadyTransmittingMulticast";
-    case Result::ServerNotTransmittingMulticast:
-      return "ServerNotTransmittingMulticast";
-    case Result::Success:
-      return "Success";
-    case Result::Unknown:
-      return "Unknown";
-    default:
-      return "unknown";
+  case Result::ClientAlreadyConnected:
+    return "ClientAlreadyConnected";
+  case Result::ClientConnectionFailed:
+    return "";
+  case Result::CoLinearAxes:
+    return "CoLinearAxes";
+  case Result::InvalidDeviceName:
+    return "InvalidDeviceName";
+  case Result::InvalidDeviceOutputName:
+    return "InvalidDeviceOutputName";
+  case Result::InvalidHostName:
+    return "InvalidHostName";
+  case Result::InvalidIndex:
+    return "InvalidIndex";
+  case Result::InvalidLatencySampleName:
+    return "InvalidLatencySampleName";
+  case Result::InvalidMarkerName:
+    return "InvalidMarkerName";
+  case Result::InvalidMulticastIP:
+    return "InvalidMulticastIP";
+  case Result::InvalidSegmentName:
+    return "InvalidSegmentName";
+  case Result::InvalidSubjectName:
+    return "InvalidSubjectName";
+  case Result::LeftHandedAxes:
+    return "LeftHandedAxes";
+  case Result::NoFrame:
+    return "NoFrame";
+  case Result::NotConnected:
+    return "NotConnected";
+  case Result::NotImplemented:
+    return "NotImplemented";
+  case Result::ServerAlreadyTransmittingMulticast:
+    return "ServerAlreadyTransmittingMulticast";
+  case Result::ServerNotTransmittingMulticast:
+    return "ServerNotTransmittingMulticast";
+  case Result::Success:
+    return "Success";
+  case Result::Unknown:
+    return "Unknown";
+  default:
+    return "unknown";
   }
 }
 
@@ -140,12 +145,8 @@ public:
   bool is_ready;
   tf::Transform calibration_pose;
   bool calibrated;
-  SegmentPublisher() :
-    is_ready(false), calibration_pose(tf::Pose::getIdentity()),
-        calibrated(false)
-  {
-  }
-  ;
+  SegmentPublisher() : is_ready(false), calibration_pose(tf::Pose::getIdentity()),
+                       calibrated(false){};
 };
 
 typedef map<string, SegmentPublisher> SegmentMap;
@@ -169,7 +170,7 @@ private:
   ros::Publisher marker_pub_;
   // TF Broadcaster
   tf::TransformBroadcaster tf_broadcaster_;
-  //geometry_msgs::PoseStamped vicon_pose;
+  // geometry_msgs::PoseStamped vicon_pose;
   tf::Transform flyer_transform;
   ros::Time now_time;
   // TODO: Make the following configurable:
@@ -186,7 +187,8 @@ private:
   bool marker_data_enabled;
   bool unlabeled_marker_data_enabled;
 
-  bool broadcast_tf_, publish_tf_, publish_markers_;
+  bool broadcast_tf_, publish_tf_, publish_markers_, data_to_file_;
+  std::string output_file_ = "/root/data/output.csv";
 
   bool grab_frames_;
   // boost::thread grab_frames_thread_;
@@ -203,24 +205,23 @@ public:
     grab_frames_ = true;
     // test grabbing in the main loop and run an asynchronous spinner instead
     grabThread();
-    //grab_frames_thread_ = boost::thread(&ViconReceiver::grabThread, this);
+    // grab_frames_thread_ = boost::thread(&ViconReceiver::grabThread, this);
   }
 
   void stopGrabbing()
   {
     grab_frames_ = false;
-    //grab_frames_thread_.join();
+    // grab_frames_thread_.join();
   }
 
-  ViconReceiver() :
-    nh_priv("~"),
-    diag_updater(),
-    min_freq_(0.1), max_freq_(1000),
-    freq_status_(diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_)),
-    stream_mode_("ClientPull"),
-        host_name_(""), tf_ref_frame_id_("world"), tracked_frame_suffix_("vicon"),
-        lastFrameNumber(0), frameCount(0), droppedFrameCount(0), frame_datum(0), n_markers(0), n_unlabeled_markers(0),
-        marker_data_enabled(false), unlabeled_marker_data_enabled(false), grab_frames_(false)
+  ViconReceiver() : nh_priv("~"),
+                    diag_updater(),
+                    min_freq_(0.1), max_freq_(1000),
+                    freq_status_(diagnostic_updater::FrequencyStatusParam(&min_freq_, &max_freq_)),
+                    stream_mode_("ClientPull"),
+                    host_name_(""), tf_ref_frame_id_("world"), tracked_frame_suffix_("vicon"),
+                    lastFrameNumber(0), frameCount(0), droppedFrameCount(0), frame_datum(0), n_markers(0), n_unlabeled_markers(0),
+                    marker_data_enabled(false), unlabeled_marker_data_enabled(false), grab_frames_(false)
   {
     // Diagnostics
     diag_updater.add("ViconReceiver Status", this, &ViconReceiver::diagnostics);
@@ -233,8 +234,11 @@ public:
     nh_priv.param("tf_ref_frame_id", tf_ref_frame_id_, tf_ref_frame_id_);
     nh_priv.param("broadcast_transform", broadcast_tf_, true);
     nh_priv.param("publish_transform", publish_tf_, true);
+    nh_priv.param("write_data", data_to_file_, true);
+    nh_priv.param("output_file", output_file_, output_file_);
     nh_priv.param("publish_markers", publish_markers_, true);
-    if (init_vicon() == false){
+    if (init_vicon() == false)
+    {
       ROS_ERROR("Error while connecting to Vicon. Exiting now.");
       return;
     }
@@ -247,8 +251,29 @@ public:
     calibrate_segment_server_ = nh_priv.advertiseService("calibrate_segment", &ViconReceiver::calibrateSegmentCallback,
                                                          this);
 
+    // check if we log data to file
+    if (data_to_file_)
+    {
+      // delte file if it exists
+      try
+      {
+        if (std::filesystem::remove(output_file_))
+          std::cout << "file " << output_file_ << " deleted.\n";
+        else
+          std::cout << "file " << output_file_ << " not found.\n";
+      }
+      catch (const std::filesystem::filesystem_error &err)
+      {
+        std::cout << "filesystem error: " << err.what() << '\n';
+      }
+      // write headers
+      std::ofstream output_file_stream;
+      output_file_stream.open(output_file_);
+      output_file_stream << "#timestamp, p_RS_R_x [m], p_RS_R_y [m], p_RS_R_z [m], q_RS_w [], q_RS_x [], q_RS_y [], q_RS_z [] \n";
+      output_file_stream.close();
+    }
     // Publishers
-    if(publish_markers_)
+    if (publish_markers_)
     {
       marker_pub_ = nh.advertise<vicon_bridge::Markers>(tracked_frame_suffix_ + "/markers", 10);
     }
@@ -261,13 +286,14 @@ public:
     {
       std::cout << time_log_[i] << std::endl;
     }
-    if (shutdown_vicon() == false){
+    if (shutdown_vicon() == false)
+    {
       ROS_ERROR("Error while shutting down Vicon.");
     }
   }
 
 private:
-  void diagnostics(diagnostic_updater::DiagnosticStatusWrapper& stat)
+  void diagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat)
   {
     stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "OK");
     stat.add("latest VICON frame number", lastFrameNumber);
@@ -311,39 +337,37 @@ private:
       ros::shutdown();
     }
 
-    ROS_INFO_STREAM("Setting Stream Mode to " << stream_mode_<< ": "<< Adapt(result));
+    ROS_INFO_STREAM("Setting Stream Mode to " << stream_mode_ << ": " << Adapt(result));
 
     vicon_client_.SetAxisMapping(Direction::Forward, Direction::Left, Direction::Up); // 'Z-up'
     Output_GetAxisMapping _Output_GetAxisMapping = vicon_client_.GetAxisMapping();
 
     ROS_INFO_STREAM("Axis Mapping: X-" << Adapt(_Output_GetAxisMapping.XAxis) << " Y-"
-        << Adapt(_Output_GetAxisMapping.YAxis) << " Z-" << Adapt(_Output_GetAxisMapping.ZAxis));
+                                       << Adapt(_Output_GetAxisMapping.YAxis) << " Z-" << Adapt(_Output_GetAxisMapping.ZAxis));
 
     vicon_client_.EnableSegmentData();
     ROS_ASSERT(vicon_client_.IsSegmentDataEnabled().Enabled);
 
     Output_GetVersion _Output_GetVersion = vicon_client_.GetVersion();
     ROS_INFO_STREAM("Version: " << _Output_GetVersion.Major << "." << _Output_GetVersion.Minor << "."
-        << _Output_GetVersion.Point);
+                                << _Output_GetVersion.Point);
     return true;
   }
 
   void createSegmentThread(const string subject_name, const string segment_name)
   {
-    ROS_INFO("creating new object %s/%s ...",subject_name.c_str(), segment_name.c_str() );
+    ROS_INFO("creating new object %s/%s ...", subject_name.c_str(), segment_name.c_str());
     boost::mutex::scoped_lock lock(segments_mutex_);
-    SegmentPublisher & spub = segment_publishers_[subject_name + "/" + segment_name];
+    SegmentPublisher &spub = segment_publishers_[subject_name + "/" + segment_name];
 
     // we don't need the lock anymore, since rest is protected by is_ready
     lock.unlock();
 
-    if(publish_tf_)
+    if (publish_tf_)
     {
-      spub.pub = nh.advertise<geometry_msgs::TransformStamped>(tracked_frame_suffix_ + "/" 
-                                          + subject_name + "/" + segment_name, 10);
+      spub.pub = nh.advertise<geometry_msgs::TransformStamped>(tracked_frame_suffix_ + "/" + subject_name + "/" + segment_name, 10);
       // also use a "normal" transform message for RVIZ display
-      spub.pub_tf = nh.advertise<geometry_msgs::Transform>(tracked_frame_suffix_ + "/" 
-                                          + subject_name + "_TF/" + segment_name, 10);
+      spub.pub_tf = nh.advertise<geometry_msgs::Transform>(tracked_frame_suffix_ + "/" + subject_name + "_TF/" + segment_name, 10);
     }
     // try to get zero pose from parameter server
     string param_suffix(subject_name + "/" + segment_name + "/zero_pose/");
@@ -372,7 +396,6 @@ private:
 
     spub.is_ready = true;
     ROS_INFO("... done, advertised as \" %s/%s/%s\" ", tracked_frame_suffix_.c_str(), subject_name.c_str(), segment_name.c_str());
-
   }
 
   void createSegment(const string subject_name, const string segment_name)
@@ -382,7 +405,7 @@ private:
 
   void grabThread()
   {
-    ros::Duration d(1.0 / 240.0);  // TODO: Configurable
+    ros::Duration d(1.0 / 240.0); // TODO: Configurable
 
     while (ros::ok() && grab_frames_)
     {
@@ -416,8 +439,8 @@ private:
     static ros::Time lastTime;
     Output_GetFrameNumber OutputFrameNum = vicon_client_.GetFrameNumber();
 
-    //frameCount++;
-    //ROS_INFO_STREAM("Grabbed a frame: " << OutputFrameNum.FrameNumber);
+    // frameCount++;
+    // ROS_INFO_STREAM("Grabbed a frame: " << OutputFrameNum.FrameNumber);
     int frameDiff = 0;
     if (lastFrameNumber != 0)
     {
@@ -428,7 +451,7 @@ private:
         droppedFrameCount += frameDiff;
         double droppedFramePct = (double)droppedFrameCount / frameCount * 100;
         ROS_DEBUG_STREAM(frameDiff << " more (total " << droppedFrameCount << "/" << frameCount << ", "
-            << droppedFramePct << "%) frame(s) dropped. Consider adjusting rates.");
+                                   << droppedFramePct << "%) frame(s) dropped. Consider adjusting rates.");
       }
     }
     lastFrameNumber = OutputFrameNum.FrameNumber;
@@ -442,12 +465,12 @@ private:
       freq_status_.tick();
       ros::Duration vicon_latency(vicon_client_.GetLatencyTotal().Total);
 
-      if(publish_tf_ || broadcast_tf_)
+      if (publish_tf_ || broadcast_tf_)
       {
         process_subjects(now_time - vicon_latency);
       }
 
-      if(publish_markers_)
+      if (publish_markers_)
       {
         process_markers(now_time - vicon_latency, lastFrameNumber);
       }
@@ -457,13 +480,13 @@ private:
     }
   }
 
-  void process_subjects(const ros::Time& frame_time)
+  void process_subjects(const ros::Time &frame_time)
   {
     string tracked_frame, subject_name, segment_name;
     unsigned int n_subjects = vicon_client_.GetSubjectCount().SubjectCount;
     SegmentMap::iterator pub_it;
     tf::Transform transform;
-    std::vector<tf::StampedTransform, std::allocator<tf::StampedTransform> > transforms;
+    std::vector<tf::StampedTransform, std::allocator<tf::StampedTransform>> transforms;
     geometry_msgs::TransformStampedPtr pose_msg(new geometry_msgs::TransformStamped);
     geometry_msgs::TransformPtr pose_msg_tf(new geometry_msgs::Transform);
     static unsigned int cnt = 0;
@@ -480,16 +503,16 @@ private:
 
         Output_GetSegmentGlobalTranslation trans = vicon_client_.GetSegmentGlobalTranslation(subject_name, segment_name);
         Output_GetSegmentGlobalRotationQuaternion quat = vicon_client_.GetSegmentGlobalRotationQuaternion(subject_name,
-                                                                                                        segment_name);
+                                                                                                          segment_name);
 
         if (trans.Result == Result::Success && quat.Result == Result::Success)
         {
           if (!trans.Occluded && !quat.Occluded)
           {
             transform.setOrigin(tf::Vector3(trans.Translation[0] / 1000, trans.Translation[1] / 1000,
-                                                  trans.Translation[2] / 1000));
+                                            trans.Translation[2] / 1000));
             transform.setRotation(tf::Quaternion(quat.Rotation[0], quat.Rotation[1], quat.Rotation[2],
-                                                       quat.Rotation[3]));
+                                                 quat.Rotation[3]));
 
             tracked_frame = tracked_frame_suffix_ + "/" + subject_name + "/" + segment_name;
 
@@ -500,23 +523,29 @@ private:
               pub_it = segment_publishers_.find(subject_name + "/" + segment_name);
               if (pub_it != segment_publishers_.end())
               {
-                SegmentPublisher & seg = pub_it->second;
-                //ros::Time thisTime = now_time - ros::Duration(latencyInMs / 1000);
+                SegmentPublisher &seg = pub_it->second;
+                // ros::Time thisTime = now_time - ros::Duration(latencyInMs / 1000);
 
                 if (seg.is_ready)
                 {
                   transform = transform * seg.calibration_pose;
                   transforms.push_back(tf::StampedTransform(transform, frame_time, tf_ref_frame_id_, tracked_frame));
-//                  transform = tf::StampedTransform(flyer_transform, frame_time, tf_ref_frame_id_, tracked_frame);
-//                  tf_broadcaster_.sendTransform(transform);
+                  //                  transform = tf::StampedTransform(flyer_transform, frame_time, tf_ref_frame_id_, tracked_frame);
+                  //                  tf_broadcaster_.sendTransform(transform);
 
-                  if(publish_tf_)
+                  if (publish_tf_)
                   {
                     // TODO: change to transform only
                     tf::transformStampedTFToMsg(transforms.back(), *pose_msg);
                     tf::transformTFToMsg(transforms.back(), *pose_msg_tf);
                     seg.pub.publish(pose_msg);
                     seg.pub_tf.publish(pose_msg_tf);
+
+                    // write data to csv file
+                    if (data_to_file_)
+                    {
+                      transformToCsv(pose_msg);
+                    }
                   }
                 }
               }
@@ -530,25 +559,25 @@ private:
           else
           {
             if (cnt % 100 == 0)
-              ROS_WARN_STREAM("" << subject_name <<" occluded, not publishing... " );
+              ROS_WARN_STREAM("" << subject_name << " occluded, not publishing... ");
           }
         }
         else
         {
           ROS_WARN("GetSegmentGlobalTranslation/Rotation failed (result = %s, %s), not publishing...",
-              Adapt(trans.Result).c_str(), Adapt(quat.Result).c_str());
+                   Adapt(trans.Result).c_str(), Adapt(quat.Result).c_str());
         }
       }
     }
 
-    if(broadcast_tf_)
+    if (broadcast_tf_)
     {
       tf_broadcaster_.sendTransform(transforms);
     }
     cnt++;
   }
 
-  void process_markers(const ros::Time& frame_time, unsigned int vicon_frame_num)
+  void process_markers(const ros::Time &frame_time, unsigned int vicon_frame_num)
   {
     if (marker_pub_.getNumSubscribers() > 0)
     {
@@ -577,14 +606,13 @@ private:
         // Count the number of markers
         unsigned int num_subject_markers = vicon_client_.GetMarkerCount(this_subject_name).MarkerCount;
         n_markers += num_subject_markers;
-        //std::cout << "    Markers (" << MarkerCount << "):" << std::endl;
+        // std::cout << "    Markers (" << MarkerCount << "):" << std::endl;
         for (unsigned int MarkerIndex = 0; MarkerIndex < num_subject_markers; ++MarkerIndex)
         {
           vicon_bridge::Marker this_marker;
           this_marker.marker_name = vicon_client_.GetMarkerName(this_subject_name, MarkerIndex).MarkerName;
           this_marker.subject_name = this_subject_name;
-          this_marker.segment_name
-              = vicon_client_.GetMarkerParentName(this_subject_name, this_marker.marker_name).SegmentName;
+          this_marker.segment_name = vicon_client_.GetMarkerParentName(this_subject_name, this_marker.marker_name).SegmentName;
 
           // Get the global marker translation
           Output_GetMarkerGlobalTranslation _Output_GetMarkerGlobalTranslation =
@@ -600,7 +628,7 @@ private:
       }
       // get unlabeled markers
       unsigned int UnlabeledMarkerCount = vicon_client_.GetUnlabeledMarkerCount().MarkerCount;
-      //ROS_INFO("# unlabeled markers: %d", UnlabeledMarkerCount);
+      // ROS_INFO("# unlabeled markers: %d", UnlabeledMarkerCount);
       n_markers += UnlabeledMarkerCount;
       n_unlabeled_markers = UnlabeledMarkerCount;
       for (unsigned int UnlabeledMarkerIndex = 0; UnlabeledMarkerIndex < UnlabeledMarkerCount; ++UnlabeledMarkerIndex)
@@ -621,14 +649,14 @@ private:
         else
         {
           ROS_WARN("GetUnlabeledMarkerGlobalTranslation failed (result = %s)",
-              Adapt(_Output_GetUnlabeledMarkerGlobalTranslation.Result).c_str());
+                   Adapt(_Output_GetUnlabeledMarkerGlobalTranslation.Result).c_str());
         }
       }
       marker_pub_.publish(markers_msg);
     }
   }
 
-  bool grabPoseCallback(vicon_bridge::viconGrabPose::Request& req, vicon_bridge::viconGrabPose::Response& resp)
+  bool grabPoseCallback(vicon_bridge::viconGrabPose::Request &req, vicon_bridge::viconGrabPose::Response &resp)
   {
     ROS_INFO("Got request for a VICON pose");
     tf::TransformListener tf_listener;
@@ -684,8 +712,8 @@ private:
     return true;
   }
 
-  bool calibrateSegmentCallback(vicon_bridge::viconCalibrateSegment::Request& req,
-                                vicon_bridge::viconCalibrateSegment::Response& resp)
+  bool calibrateSegmentCallback(vicon_bridge::viconCalibrateSegment::Request &req,
+                                vicon_bridge::viconCalibrateSegment::Response &resp)
   {
 
     std::string full_name = req.subject_name + "/" + req.segment_name;
@@ -701,7 +729,7 @@ private:
       return false;
     }
 
-    SegmentPublisher & seg = seg_it->second;
+    SegmentPublisher &seg = seg_it->second;
 
     if (seg.calibrated)
     {
@@ -752,9 +780,25 @@ private:
 
     return true;
   }
+
+  void transformToCsv(geometry_msgs::TransformStampedPtr pose_msg_)
+  {
+    // append data to csv file
+    std::ofstream output_file_stream;
+    output_file_stream.open(output_file_);
+    output_file_stream  << pose_msg_->header.stamp.nsec << "," 
+                        << pose_msg_->transform.translation.x << ","
+                        << pose_msg_->transform.translation.y << "," 
+                        << pose_msg_->transform.translation.z << ","
+                        << pose_msg_->transform.rotation.x << ","
+                        << pose_msg_->transform.rotation.y << ","
+                        << pose_msg_->transform.rotation.z << ","
+                        << pose_msg_->transform.rotation.w << "\n";
+    output_file_stream.close();
+  }
 };
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   ros::init(argc, argv, "vicon");
 
