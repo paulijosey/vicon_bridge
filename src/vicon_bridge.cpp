@@ -49,6 +49,7 @@
 #include <tf/transform_listener.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/Transform.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <vicon_bridge/viconGrabPose.h>
 #include <vicon_bridge/Markers.h>
 #include <vicon_bridge/Marker.h>
@@ -141,7 +142,7 @@ class SegmentPublisher
 {
 public:
   ros::Publisher pub;
-  ros::Publisher pub_tf;
+  ros::Publisher pub_pose;
   bool is_ready;
   tf::Transform calibration_pose;
   bool calibrated;
@@ -367,7 +368,7 @@ private:
     {
       spub.pub = nh.advertise<geometry_msgs::TransformStamped>(tracked_frame_suffix_ + "/" + subject_name + "/" + segment_name, 10);
       // also use a "normal" transform message for RVIZ display
-      spub.pub_tf = nh.advertise<geometry_msgs::Transform>(tracked_frame_suffix_ + "/" + subject_name + "_TF/" + segment_name, 10);
+      spub.pub_pose = nh.advertise<geometry_msgs::PoseStamped>(tracked_frame_suffix_ + "/" + subject_name + "_POSE/" + segment_name, 10);
     }
     // try to get zero pose from parameter server
     string param_suffix(subject_name + "/" + segment_name + "/zero_pose/");
@@ -537,9 +538,9 @@ private:
                   {
                     // TODO: change to transform only
                     tf::transformStampedTFToMsg(transforms.back(), *pose_msg);
-                    tf::transformTFToMsg(transforms.back(), *pose_msg_tf);
+                    // tf::transformTFToMsg(transforms.back(), *pose_msg_tf);
                     seg.pub.publish(pose_msg);
-                    seg.pub_tf.publish(pose_msg_tf);
+                    seg.pub_pose.publish(transformToPose(pose_msg));
 
                     // write data to csv file
                     if (data_to_file_)
@@ -785,8 +786,8 @@ private:
   {
     // append data to csv file
     std::ofstream output_file_stream;
-    output_file_stream.open(output_file_);
-    output_file_stream  << pose_msg_->header.stamp.nsec << "," 
+    output_file_stream.open(output_file_, std::ios_base::app);
+    output_file_stream  << pose_msg_->header.stamp << "," 
                         << pose_msg_->transform.translation.x << ","
                         << pose_msg_->transform.translation.y << "," 
                         << pose_msg_->transform.translation.z << ","
@@ -795,6 +796,17 @@ private:
                         << pose_msg_->transform.rotation.z << ","
                         << pose_msg_->transform.rotation.w << "\n";
     output_file_stream.close();
+  }
+
+  geometry_msgs::PoseStamped transformToPose(geometry_msgs::TransformStampedPtr pose_msg_)
+  {
+    geometry_msgs::PoseStamped pose;
+    pose.header = pose_msg_->header;
+    pose.pose.position.x = pose_msg_->transform.translation.x;
+    pose.pose.position.y = pose_msg_->transform.translation.y;
+    pose.pose.position.z = pose_msg_->transform.translation.z;
+    pose.pose.orientation = pose_msg_->transform.rotation;
+    return pose;
   }
 };
 
